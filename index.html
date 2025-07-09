@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>實時語音轉寫 (WSS安全版)</title>
+    <title>實時語音轉寫 (React 版)</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
@@ -18,9 +21,6 @@
         h1 { 
             color: #1c1e21; 
         }
-        #controls { 
-            margin-bottom: 20px; 
-        }
         button { 
             font-size: 1.2em; 
             padding: 10px 20px; 
@@ -34,13 +34,6 @@
             background-color: #42b72a; 
             color: white; 
         }
-        #startButton.recording { 
-            background-color: #fa383e; 
-        }
-        #stopButton { 
-            background-color: #8a8d91; 
-            color: white; 
-        }
         #status { 
             margin-bottom: 20px; 
             font-size: 1.1em; 
@@ -48,7 +41,7 @@
             min-height: 1.5em; 
             text-align: center;
         }
-        #transcription { 
+        pre { 
             width: 80%; 
             max-width: 600px; 
             height: 200px; 
@@ -58,110 +51,17 @@
             overflow-y: scroll; 
             background-color: white; 
             line-height: 1.5;
+            white-space: pre-wrap; /* 讓文本自動換行 */
+            word-wrap: break-word; /* 確保長單詞也能換行 */
         }
     </style>
 </head>
 <body>
-    <h1>實時語音轉寫 (WSS安全版)</h1>
-    <div id="controls">
-        <button id="startButton">開始錄音</button>
-        <button id="stopButton" disabled>停止錄音</button>
-    </div>
-    <div id="status">請點擊 "開始錄音"</div>
-    <div id="transcription"></div>
+    <div id="root"></div>
 
-    <script>
-        const startButton = document.getElementById('startButton');
-        const stopButton = document.getElementById('stopButton');
-        const statusDiv = document.getElementById('status');
-        const transcriptionDiv = document.getElementById('transcription');
-
-        let socket;
-        let mediaRecorder;
-        let stream;
-        const TIMESLICE = 5500; // 每 5.5 秒發送一次音訊數據
-
-        startButton.onclick = async () => {
-            const ngrokUrl = prompt("請貼上從 Kaggle 複製的 ngrok URL (例如 2.tcp.ngrok.io:14413):");
-            if (!ngrokUrl || ngrokUrl.trim() === "") {
-                statusDiv.textContent = "操作已取消。";
-                return;
-            }
-
-            // 使用 wss:// (Secure WebSocket) 協議，以匹配後端
-            const wsUrl = `wss://${ngrokUrl.trim()}`;
-            
-            statusDiv.textContent = `正在連接到 ${wsUrl}...`;
-
-            try {
-                // 請求麥克風權限
-                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                // 建立 WebSocket 連線
-                socket = new WebSocket(wsUrl);
-
-                socket.onopen = () => {
-                    statusDiv.textContent = "✅ 連線成功！正在錄音...";
-                    startButton.disabled = true;
-                    stopButton.disabled = false;
-                    startButton.classList.add('recording');
-
-                    mediaRecorder = new MediaRecorder(stream);
-
-                    // 當有音訊數據可用時觸發
-                    mediaRecorder.ondataavailable = (event) => {
-                        if (event.data.size > 0 && socket.readyState === WebSocket.OPEN) {
-                            socket.send(event.data);
-                        }
-                    };
-
-                    // 當收到後端傳來的訊息時觸發
-                    socket.onmessage = (event) => {
-                        const receivedText = event.data;
-                        transcriptionDiv.innerHTML += receivedText + '<br>';
-                        // 自動滾動到底部
-                        transcriptionDiv.scrollTop = transcriptionDiv.scrollHeight;
-                    };
-
-                    socket.onclose = (event) => {
-                        console.log('WebSocket closed:', event);
-                        statusDiv.textContent = "連線已關閉。";
-                        stopRecording();
-                    };
-
-                    socket.onerror = (error) => {
-                        console.error("WebSocket Error:", error);
-                        statusDiv.textContent = "❌ 連線錯誤！請檢查瀏覽器控制台以獲取詳細資訊。可能需要接受自簽署證書。";
-                        stopRecording();
-                    };
-
-                    // 以固定的時間間隔開始錄音
-                    mediaRecorder.start(TIMESLICE);
-                };
-
-            } catch (err) {
-                console.error("Error accessing media devices.", err);
-                statusDiv.textContent = "❌ 無法獲取麥克風權限！";
-            }
-        };
-
-        const stopRecording = () => {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-            }
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
-                socket.close();
-            }
-            startButton.disabled = false;
-            stopButton.disabled = true;
-            startButton.classList.remove('recording');
-            statusDiv.textContent = "錄音已停止。";
-        };
-
-        stopButton.onclick = stopRecording;
+    <script type="text/babel">
+        import VoiceComponent from './app.js';
+        ReactDOM.createRoot(document.getElementById('root')).render(<VoiceComponent />);
     </script>
 </body>
 </html>
